@@ -309,3 +309,226 @@ The `Base` object is a Python class that serves as the base class for the ORM ma
 ...		fullname = Column(String)
 ...
 ...		addresses = relationship("Address", back_populates="user")
+...
+...		def __repr__(self):
+...			return f"User(id={self.id!r}, name={self.name!r}, fullname={self.fullname!r})"
+
+>>> class Address(Base):
+...		__tablename__ = 'address'
+...
+...		id = Column(Integer, primary_key=True)
+...		email_address = Column(String, nullable=False)
+...		user_id = Column(Integer, ForeignKey('user_account.id'))
+...
+...		user = relationship("User", back_populates="addresses")
+...
+...		def __repr__(self):
+...			return f"Address(id={self.id!r}, email_address={self.email_address!r})"
+```
+
+The above classes are mapped and are available for use in ORM.
+They also include `Table` objects that were generated.
+
+```py
+>>> User.__table__
+Table('user_account', MetaData(),
+	Column('id', Integer(), table=<user_account>, primary key=)
+	...
+)
+```
+
+
+### Other Mapped Class Details
+
+* The classes have an automatically generated `__init__()` method.
+
+```py
+>>> sandy = User(name="sandy", fullname="Sandy Cheeks")
+```
+
+* `__repr__()` method is fully optional.
+
+```py
+>>> sandy
+User(id=None, name='sandy', fullname='Sandy Cheeks')
+```
+
+the `id` attribute automatically returns `None` when accessed.
+
+
+* a bidirectional relationship using `relationship()` on both classes.
+
+### Emitting DDL to the database
+
+Not any different to emitting with Core.
+Can still use `MetaData.create_all()`.
+
+```py
+# emit CREATE statements given ORM registry
+mapper_registry.metadata.create_all(engine)
+
+# the identical MetaData object is also present on the 
+# declarative base
+Base.metadata.create_all(engine)
+```
+
+### Combining Core Table Declarations with ORM Declarative
+
+an also make use of the `Table` objects created in conjunction with declarative mapped classes from a `declarative_base()` generated base class.
+
+This is called `hybrid table` and consists of assigning to the `.__table__` attribute directly.
+
+```py
+mapper_registry = registry()
+Base = mapper_registry.generate_base()
+
+class User(Base):
+	__table__ = user_table
+
+	addresses = relationship("Address", back_populates="user")
+
+	def __repr__(self):
+		return f"User({self.name!r}, {self.fullname!r})"
+
+class Address(Base):
+	__table__ = address_table
+
+	user = relationship("User", back_populates="addresses")
+
+	def __repr__(self):
+		return f"Address({self.email_address!r})"
+```
+
+### Table Reflection
+
+Table reflection is the process of generating `Table` and related objects by reading the current state of a database.
+
+```py
+>>> some_table = Table("some_table", metadata_obj, autoload_with=engine)
+```
+
+# Working with Data
+
+## Inserting Rows with Core
+
+An SQL `INSERT` statement is generated using the `insert()` function.
+Generates a new instance of `Insert` which represents an `INSERT` statement in SQL.
+
+
+### the `insert()` SQL Expression Construct
+
+```py
+>>> from sqlalchemy import insert
+>>> stmt = insert(user_table).values(name='spongebob', fullname="Spongebob Squarepants")
+```
+
+Most SQL expressions can be stringified in place as a means to see the general form of what's being produced.
+
+```py
+>>> print(stmt)
+INSERT INTO user_account (name, fullname) VALUES (:name, :fullname)
+```
+
+### Executing the Statement
+
+```py
+>>> with engine.connect() as conn:
+...		result = conn.execute(stmt)
+...		conn.commit()
+```
+
+The `INSERT` statement above does not return any rows.
+
+
+### `INSERT` usually generates the "values" clause automatically
+
+
+The usual way that `Insert` is used generates this automatically.
+
+```py
+>>> with engine.connect() as conn:
+...		result = conn.execute(
+...			insert(user_table),
+...			[
+...				{"name": "sandy", "fullname": "Sandy Cheeks"},
+...				{"name": "patrick", "fullname": "Patrick Star"}
+...			]
+...		)
+...		conn.commit()
+```
+
+Don't need to do this
+
+```py
+from sqlalchemy import select, bindparam
+scalar_subq = (
+	select(user_table.c.id).
+	where(user_table.c.name==bindparam('username')).
+	scalar_subquery()
+)
+
+with engine.connect() as conn:
+	result = conn.execute(
+		insert(address_table).values(user_id=scalar_subq),
+		[
+			{}
+			{"username": 'spongebob', "email_address": "spongebob@sqlalchemy.org"},
+			{"username": 'sandy', "email_address": "sandy@sqlalchemy.org"},
+			{"username": 'sandy', "email_address": "sandy@squirrelpower.org"},
+		]
+	)
+	conn.commit()
+```
+
+### INSERT ... FROM SELECT
+
+Can compose an INSERT that gets rows directly from a SELECT using the `Insert.from_select()` method:
+
+```py
+select_stmt = select(user_table.c.id, user_table.c.name + "@aol.com")
+insert_stmt = insert(address_table).from_select(
+	["user_id", "email_address"], select_stmt
+)
+print(insert_stmt)
+```
+
+### INSERT...RETURNING
+
+```py
+insert_stmt = insert(address_table).returning(address_table.c.id, address_table.c.email_address)
+print(insert_stmt)
+```
+
+## Selecting Rows with Core or ORM
+
+The `select()` function generates a `Select` construct.
+
+
+### The `select()` SQL Expression Construct
+
+```py
+from sqlalchemy import select
+stmt = select(user_table).where(user_table.c.name == 'spongebob')
+print(stmt)
+```
+
+To actually run the statement, pass it to an execution method. Iterate the result object to get `Row` objects.
+
+```py
+with engine.connect() as conn:
+	for row in conn.execute(stmt):
+		print(row)
+```
+
+
+When using the ORM, execute it using the `Session.execute()` method.
+
+```py
+stmt = select(User).where(User.name == 'spongebob')
+with Session(engine) as session:
+	for row in session.execute(stmt):
+		print(row)
+```
+
+### Setting the COLUMNS and FROM clause
+
