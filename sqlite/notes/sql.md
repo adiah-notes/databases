@@ -218,3 +218,99 @@ Each keyword is a separate clause.
 Think of the `select` command as a pipeline that processes relations.
 
 ![select pipeline](select.png)
+
+The most common involves `select`, `from`, and `where`.
+
+```sql
+select heading from tables where predicate;
+```
+
+- `from` is a comma separated list of one/more tables/views. The resulting relation produced by `from` serves as initial material.
+
+- `where` filters rows. The argument is a predicate or logical expression. The selected rows form a new relation.
+
+E.g.
+
+```sql
+select id, name from food_types;
+```
+
+> Without `where`, all rows are outputted.
+
+`select * from food_types;`
+
+> Use `*` for all columns.
+
+from -> -> where (restriction) -> select (projection) -> result
+
+### Filtering
+
+`where` is the most complex clause in `select`.
+SQLite applies `where` to each row of the relation `from`.
+
+`select * from dogs where color = 'purple' and grin = 'toothy';`
+The database will take each row in table `dogs` and apply the `where` clause.
+
+## Values
+
+Some kind of data in the real world.
+
+## Operators
+
+## Binary Operators
+
+||; \* ; /; %; +; -;
+
+## Logical Operators
+
+`(x > 5) AND (x != 3)`
+
+`select * from foods where name = 'JujyFruit' and type_id=9;`
+
+## Like and Glob Operators
+
+`like` is similar to `=`. Used for matching string values against patterns.
+
+`select id, name from foods where name like 'J%';`
+
+> `%` matches 0 or more characters
+> `_` matches any single character
+
+`select id, name from foods where name like '%ac%P%';`
+
+`select id, name from foods where name glob 'Pine*';`
+
+## Limiting and Ordering
+
+- `limit` specifies the max number of records to return.
+
+- `offset` specifies the number of records to skip.
+
+`select * from food_types order by id limit 1 offset 1;`
+
+The offset clause skips 1 row (Bakery). Limit clause returns one maximum row.
+
+- `order by` sorts the results by a column(s) before it is returned.
+  - comma-separated list of columns
+  - sort-order `asc` or `desc`.
+
+```sql
+SELECT
+        *
+FROM
+        foods
+WHERE
+        name LIKE 'B%'
+ORDER BY type_id desc, name
+LIMIT 10;
+```
+
+> Usually only need second order by if there are duplicates.
+
+Can use comma notation instead of limit and offset
+
+`select * from foods where name like 'B%' order by type_id desc, name limit 1 offset 2;`
+
+is equivalent to
+
+`select * from foods where name like 'B%' order by type_id desc, name limit 2, 1;`
